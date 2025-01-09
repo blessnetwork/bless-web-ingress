@@ -19,7 +19,6 @@ jobs:
         uses: ignite/cli/actions/release/vars@main
       - name: build
         run: |
-          GOOS=linux GOARCH=amd64 make
           echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USER }}" --password-stdin
-          docker build . --tag ghcr.io/${{ github.repository }}:${{ steps.vars.outputs.tag_name }} -f docker/Dockerfile
+          docker build --tag ghcr.io/${{ github.repository }}:${{ steps.vars.outputs.tag_name }} .
           docker push ghcr.io/${{ github.repository }}:${{ steps.vars.outputs.tag_name }}
