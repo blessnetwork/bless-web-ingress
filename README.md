@@ -42,6 +42,33 @@ This project provides a web ingress for accessing the BLESS P2P network. It allo
 
 Once the server is running, you can access the web interface at `http://localhost:8080`. Use the interface to interact with the BLESS P2P network, get results, and manage subdomain routing.
 
+### Health Check
+
+The application provides a health check endpoint to verify that the server is running and responsive. You can access the health check endpoint at `http://localhost:8080/health`.
+
+#### Example Request
+
+```sh
+curl http://localhost:8080/health
+```
+
+#### Response
+
+- **200 OK**: If the server is healthy.
+- **500 Internal Server Error**: If the server is not healthy.
+
+### Prometheus Metrics
+
+The application exposes Prometheus metrics to monitor its performance and resource usage. You can access the metrics endpoint at `http://localhost:8080/metrics`.
+
+#### Example Request
+
+```sh
+curl http://localhost:8080/metrics
+```
+
+The metrics can be scraped by a Prometheus server for further analysis and visualization.
+
 ### Return Types
 
 The system supports different return types for the responses. You can specify the return type when inserting or updating a host. The supported return types are:
