@@ -39,6 +39,18 @@ var (
 		},
 		[]string{"path"},
 	)
+	deployCount = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "total_deployments",
+			Help: "Total number of deployments",
+		},
+	)
+	updateCount = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "total_updates",
+			Help: "Total number of updates",
+		},
+	)
 )
 
 type HostData struct {
@@ -55,6 +67,8 @@ type HostData struct {
 func init() {
 	prometheus.MustRegister(reqCount)
 	prometheus.MustRegister(reqDuration)
+	prometheus.MustRegister(deployCount)
+	prometheus.MustRegister(updateCount)
 }
 
 func initDB() {
@@ -321,6 +335,7 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("Failed to insert host data") // Logging error
 		return
 	}
+	deployCount.Inc() // Increment deployment counter
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -389,6 +404,7 @@ func handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("Failed to update host data") // Logging error
 		return
 	}
+	updateCount.Inc() // Increment update counter
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
