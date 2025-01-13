@@ -16,6 +16,8 @@ FROM debian:bookworm-slim
 # Set the working directory
 WORKDIR /app
 
+RUN apt update && apt-get install -y ca-certificates
+
 # Copy the built executable from the builder stage
 COPY --from=builder /app/bless-web-ingress .
 
