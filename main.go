@@ -192,7 +192,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	if resp.StatusCode != http.StatusOK {
 		http.Error(w, "External API call failed", resp.StatusCode)
-		log.Error().Msgf("External API call failed with status: %d", resp.StatusCode) // Logging error
+		log.Error().Msgf("External API call failed with status: %d at %s for host: %s, path: %s", resp.StatusCode, externalAPIURL, r.Host, r.URL.Path) // More verbose logging
 		return
 	}
 
