@@ -173,7 +173,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
 		http.Error(w, "Failed to marshal request body", http.StatusInternalServerError)
-		log.Error().Err(err).Msg("Failed to marshal request body") // Logging error
+		log.Error().Err(err).Msgf("Failed to marshal request body for host: %s, path: %s", r.Host, r.URL.Path) // More verbose logging
 		return
 	}
 
@@ -185,7 +185,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	resp, err := http.Post(externalAPIURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		http.Error(w, "Failed to call external API", http.StatusInternalServerError)
-		log.Error().Err(err).Msg("Failed to call external API") // Logging error
+		log.Error().Err(err).Msgf("Failed to call external API at %s for host: %s, path: %s", externalAPIURL, r.Host, r.URL.Path) // More verbose logging
 		return
 	}
 	defer resp.Body.Close()
