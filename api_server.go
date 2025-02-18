@@ -32,16 +32,26 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	stdin := map[string]string{"path": "/", "method": "GET"}
+	stdinJSON, _ := json.Marshal(stdin)
 	requestBody := map[string]interface{}{
 		"function_id": data.Destination,
 		"method":      data.EntryMethod,
 		"parameters":  nil,
 		"config": map[string]interface{}{
 			"permissions":     []interface{}{},
+			"stdin":           string(stdinJSON),
 			"env_vars":        []map[string]string{{"name": "BLS_REQUEST_PATH", "value": r.URL.Path}},
 			"number_of_nodes": 1,
 		},
 	}
+
+	// Add debug logging for stdin configuration
+
+	log.Debug().Str("stdin_config", string(stdinJSON)).Msg("Stdin configuration")
+
+	// Add debug logging
+	log.Debug().Interface("request_body", requestBody).Msg("Request body before sending to external API")
 
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
@@ -79,7 +89,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	case "raw":
 		w.Header().Set("Content-Type", "application/json")
 	default:
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "text/plain")
 	}
 
 	w.WriteHeader(resp.StatusCode)
