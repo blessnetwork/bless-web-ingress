@@ -8,7 +8,7 @@ WORKDIR /app
 COPY . .
 
 # Build the project
-RUN go build -o bless-web-ingress main.go
+RUN go build -o bless-web-ingress .
 
 # Stage 2: Create the final image
 FROM debian:bookworm-slim
