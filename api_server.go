@@ -2,11 +2,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	ung "github.com/dillonstreator/go-unique-name-generator"
@@ -32,7 +34,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stdin := map[string]string{"path": "/", "method": "GET"}
+	stdin := map[string]string{"path": r.URL.Path, "method": r.Method}
 	stdinJSON, _ := json.Marshal(stdin)
 	requestBody := map[string]interface{}{
 		"function_id": data.Destination,
@@ -41,7 +43,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		"config": map[string]interface{}{
 			"permissions":     []interface{}{},
 			"stdin":           string(stdinJSON),
-			"env_vars":        []map[string]string{{"name": "BLS_REQUEST_PATH", "value": r.URL.Path}},
+			"env_vars":        []map[string]string{},
 			"number_of_nodes": 1,
 		},
 	}
@@ -137,9 +139,30 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := w.Write([]byte(stdout)); err != nil {
-		http.Error(w, "Failed to write response", http.StatusInternalServerError)
-		log.Error().Err(err).Msg("Failed to write response")
+	// Check if the response is base64 encoded with content type
+	if matched, _ := regexp.MatchString(`^data:([^;]+);base64,`, stdout); matched {
+		parts := strings.SplitN(stdout, ",", 2)
+		contentType := strings.TrimPrefix(strings.SplitN(parts[0], ":", 2)[1], "text/")
+		contentType = strings.TrimSuffix(contentType, ";base64")
+
+		w.Header().Set("Content-Type", contentType)
+
+		decoded, err := base64.StdEncoding.DecodeString(parts[1])
+		if err != nil {
+			http.Error(w, "Failed to decode base64 response", http.StatusInternalServerError)
+			log.Error().Err(err).Msg("Failed to decode base64 response")
+			return
+		}
+
+		if _, err := w.Write(decoded); err != nil {
+			http.Error(w, "Failed to write response", http.StatusInternalServerError)
+			log.Error().Err(err).Msg("Failed to write response")
+		}
+	} else {
+		if _, err := w.Write([]byte(stdout)); err != nil {
+			http.Error(w, "Failed to write response", http.StatusInternalServerError)
+			log.Error().Err(err).Msg("Failed to write response")
+		}
 	}
 	log.Info().Msg("Response sent successfully")
 }
@@ -218,11 +241,13 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("Failed to insert host data")
 		return
 	}
+
 	deployCount.Inc()
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Error().Err(err).Msg("Failed to encode response")
+		return
 	}
 	log.Info().Msg("Host data inserted successfully")
 }
@@ -287,11 +312,13 @@ func handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 		log.Error().Err(err).Msg("Failed to update host data")
 		return
 	}
+
 	updateCount.Inc()
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Error().Err(err).Msg("Failed to encode response")
+		return
 	}
 	log.Info().Msgf("Host data updated successfully for host: %s", data.Host)
 }
@@ -320,6 +347,7 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
 		http.Error(w, "Failed to write response", http.StatusInternalServerError)
 		log.Error().Err(err).Msg("Failed to write response")
+		return
 	}
 	log.Info().Msg("Health check response sent successfully")
 }
@@ -335,6 +363,7 @@ func startAPIServer() {
 	if port == "" {
 		port = "3010"
 	}
+
 	log.Info().Msgf("Server started on port %s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatal().Err(err).Msg("Server failed")
