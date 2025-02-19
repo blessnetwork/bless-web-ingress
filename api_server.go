@@ -142,8 +142,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Check if the response is base64 encoded with content type
 	if matched, _ := regexp.MatchString(`^data:([^;]+);base64,`, stdout); matched {
 		parts := strings.SplitN(stdout, ",", 2)
-		contentType := strings.TrimPrefix(strings.SplitN(parts[0], ":", 2)[1], "text/")
-		contentType = strings.TrimSuffix(contentType, ";base64")
+		contentType := strings.SplitN(parts[0], ":", 2)[1]       // Get full content type
+		contentType = strings.TrimSuffix(contentType, ";base64") // Remove base64 suffix
 
 		w.Header().Set("Content-Type", contentType)
 
