@@ -81,20 +81,6 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch data.ReturnType {
-	case "text":
-		w.Header().Set("Content-Type", "text/plain")
-	case "json":
-		w.Header().Set("Content-Type", "application/json")
-	case "html":
-		w.Header().Set("Content-Type", "text/html")
-	case "raw":
-		w.Header().Set("Content-Type", "application/json")
-	default:
-		w.Header().Set("Content-Type", "text/plain")
-	}
-
-	w.WriteHeader(resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
@@ -103,6 +89,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if data.ReturnType == "raw" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(resp.StatusCode)
 		if _, err := w.Write(body); err != nil {
 			http.Error(w, "Failed to write response", http.StatusInternalServerError)
 			log.Error().Err(err).Msg("Failed to write response")
@@ -146,6 +134,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		contentType = strings.TrimSuffix(contentType, ";base64") // Remove base64 suffix
 
 		w.Header().Set("Content-Type", contentType)
+		w.WriteHeader(resp.StatusCode)
 
 		log.Debug().
 			Str("content_type", contentType).
@@ -166,6 +155,18 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			log.Error().Err(err).Msg("Failed to write response")
 		}
 	} else {
+		// Set Content-Type based on ReturnType only for non-base64 responses
+		switch data.ReturnType {
+		case "text":
+			w.Header().Set("Content-Type", "text/plain")
+		case "json":
+			w.Header().Set("Content-Type", "application/json")
+		case "html":
+			w.Header().Set("Content-Type", "text/html")
+		default:
+			w.Header().Set("Content-Type", "text/plain")
+		}
+		w.WriteHeader(resp.StatusCode)
 		if _, err := w.Write([]byte(stdout)); err != nil {
 			http.Error(w, "Failed to write response", http.StatusInternalServerError)
 			log.Error().Err(err).Msg("Failed to write response")
