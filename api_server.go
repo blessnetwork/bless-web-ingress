@@ -147,6 +147,13 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", contentType)
 
+		log.Debug().
+			Str("content_type", contentType).
+			Str("response_format", "base64").
+			Str("data_uri_prefix", parts[0]).
+			Int("data_length", len(parts[1])).
+			Msg("Processing base64 encoded response")
+
 		decoded, err := base64.StdEncoding.DecodeString(parts[1])
 		if err != nil {
 			http.Error(w, "Failed to decode base64 response", http.StatusInternalServerError)
