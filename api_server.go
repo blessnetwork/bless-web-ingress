@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -16,7 +17,117 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	"github.com/segmentio/ksuid"
+	"golang.org/x/net/html"
 )
+
+type ExecutionResult struct {
+	Result struct {
+		Stdout   string `json:"stdout"`
+		Stderr   string `json:"stderr"`
+		ExitCode int    `json:"exit_code"`
+	} `json:"result"`
+	Peers     []string `json:"peers"`
+	Frequency int      `json:"frequency"`
+}
+
+type APIResponse struct {
+	Cluster struct {
+		Peers []string `json:"peers"`
+	} `json:"cluster"`
+	Code      string            `json:"code"`
+	RequestID string            `json:"request_id"`
+	Results   []ExecutionResult `json:"results"`
+}
+
+func injectHTMLBanner(htmlContent string, consensusNodes, totalNodes int, consensusPercentage float64) string {
+	consensusColor := "#28a745" // Green for high consensus
+	if consensusPercentage < 66 {
+		consensusColor = "#ffc107" // Yellow for medium consensus
+	}
+	if consensusPercentage < 50 {
+		consensusColor = "#dc3545" // Red for low consensus
+	}
+
+	banner := fmt.Sprintf(`<div style="background-color: #f8f9fa; padding: 10px; text-align: center; font-family: sans-serif; border-bottom: 1px solid #dee2e6;">
+		Executed on %d of %d nodes with <span style="color: %s">%.0f%% consensus</span>
+	</div>`, consensusNodes, totalNodes, consensusColor, consensusPercentage)
+
+	// Parse HTML
+	doc, err := html.Parse(strings.NewReader(htmlContent))
+	if err != nil {
+		// If parsing fails, fall back to prepending
+		return banner + htmlContent
+	}
+
+	// Find the body tag
+	var body *html.Node
+	var findBody func(*html.Node)
+	findBody = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "body" {
+			body = n
+			return
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			findBody(c)
+		}
+	}
+	findBody(doc)
+
+	if body != nil {
+		// Parse banner as a separate document
+		bannerDoc, err := html.Parse(strings.NewReader(banner))
+		if err != nil {
+			return banner + htmlContent
+		}
+
+		// Find the div node in the banner document
+		var bannerDiv *html.Node
+		var findDiv func(*html.Node)
+		findDiv = func(n *html.Node) {
+			if n.Type == html.ElementNode && n.Data == "div" {
+				bannerDiv = n
+				return
+			}
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				findDiv(c)
+			}
+		}
+		findDiv(bannerDoc)
+
+		if bannerDiv != nil {
+			// Clone the banner div and its children
+			bannerClone := &html.Node{
+				Type:     bannerDiv.Type,
+				DataAtom: bannerDiv.DataAtom,
+				Data:     bannerDiv.Data,
+				Attr:     append([]html.Attribute(nil), bannerDiv.Attr...),
+			}
+
+			// Clone children
+			for c := bannerDiv.FirstChild; c != nil; c = c.NextSibling {
+				clone := &html.Node{
+					Type:     c.Type,
+					DataAtom: c.DataAtom,
+					Data:     c.Data,
+					Attr:     append([]html.Attribute(nil), c.Attr...),
+				}
+				bannerClone.AppendChild(clone)
+			}
+
+			// Insert the cloned banner at the start of body
+			body.InsertBefore(bannerClone, body.FirstChild)
+
+			// Render modified HTML
+			var buf bytes.Buffer
+			if err := html.Render(&buf, doc); err == nil {
+				return buf.String()
+			}
+		}
+	}
+
+	// Fallback to prepending if anything fails
+	return banner + htmlContent
+}
 
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
@@ -99,33 +210,31 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var response map[string]interface{}
-	if err := json.Unmarshal(body, &response); err != nil {
+	var apiResponse APIResponse
+	if err := json.Unmarshal(body, &apiResponse); err != nil {
 		http.Error(w, "Failed to unmarshal response body", http.StatusInternalServerError)
 		log.Error().Err(err).Msg("Failed to unmarshal response body")
 		return
 	}
 
-	results, ok := response["results"].([]interface{})
-	if !ok || len(results) == 0 {
-		http.Error(w, "Invalid response format", http.StatusInternalServerError)
-		log.Error().Msg("Invalid response format")
+	if len(apiResponse.Results) == 0 {
+		http.Error(w, "No results in response", http.StatusInternalServerError)
+		log.Error().Msg("No results in response")
 		return
 	}
 
-	result, ok := results[0].(map[string]interface{})
-	if !ok {
-		http.Error(w, "Invalid response format", http.StatusInternalServerError)
-		log.Error().Msg("Invalid response format")
-		return
+	// Find result with highest consensus
+	highestConsensus := apiResponse.Results[0]
+	for _, result := range apiResponse.Results[1:] {
+		if result.Frequency > highestConsensus.Frequency {
+			highestConsensus = result
+		}
 	}
 
-	stdout, ok := result["result"].(map[string]interface{})["stdout"].(string)
-	if !ok {
-		http.Error(w, "Invalid response format", http.StatusInternalServerError)
-		log.Error().Msg("Invalid response format")
-		return
-	}
+	stdout := highestConsensus.Result.Stdout
+	totalNodes := len(apiResponse.Cluster.Peers)
+	consensusNodes := len(highestConsensus.Peers)
+	consensusPercentage := float64(highestConsensus.Frequency)
 
 	// Check if the response is base64 encoded with content type
 	if matched, _ := regexp.MatchString(`^data:([^;]+);base64,`, stdout); matched {
@@ -133,22 +242,21 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		contentType := strings.SplitN(parts[0], ":", 2)[1]       // Get full content type
 		contentType = strings.TrimSuffix(contentType, ";base64") // Remove base64 suffix
 
-		w.Header().Set("Content-Type", contentType)
-		w.WriteHeader(resp.StatusCode)
-
-		log.Debug().
-			Str("content_type", contentType).
-			Str("response_format", "base64").
-			Str("data_uri_prefix", parts[0]).
-			Int("data_length", len(parts[1])).
-			Msg("Processing base64 encoded response")
-
 		decoded, err := base64.StdEncoding.DecodeString(parts[1])
 		if err != nil {
 			http.Error(w, "Failed to decode base64 response", http.StatusInternalServerError)
 			log.Error().Err(err).Msg("Failed to decode base64 response")
 			return
 		}
+
+		// If it's HTML content, inject the banner
+		if strings.Contains(contentType, "text/html") {
+			modifiedHTML := injectHTMLBanner(string(decoded), consensusNodes, totalNodes, consensusPercentage)
+			decoded = []byte(modifiedHTML)
+		}
+
+		w.Header().Set("Content-Type", contentType)
+		w.WriteHeader(resp.StatusCode)
 
 		if _, err := w.Write(decoded); err != nil {
 			http.Error(w, "Failed to write response", http.StatusInternalServerError)
@@ -163,6 +271,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 		case "html":
 			w.Header().Set("Content-Type", "text/html")
+			stdout = injectHTMLBanner(stdout, consensusNodes, totalNodes, consensusPercentage)
 		default:
 			w.Header().Set("Content-Type", "text/plain")
 		}
