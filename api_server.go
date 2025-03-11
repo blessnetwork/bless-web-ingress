@@ -129,6 +129,45 @@ func injectHTMLBanner(htmlContent string, consensusNodes, totalNodes int, consen
 	return banner + htmlContent
 }
 
+func makeParallelRequests(urls []string, jsonData []byte) (*http.Response, []byte, error) {
+	type result struct {
+		resp *http.Response
+		body []byte
+		err  error
+	}
+
+	ch := make(chan result, len(urls))
+
+	for _, url := range urls {
+		go func(url string) {
+			resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+			if err != nil {
+				ch <- result{nil, nil, err}
+				return
+			}
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			ch <- result{resp, body, err}
+		}(url)
+	}
+
+	var lastErr error
+	for i := 0; i < len(urls); i++ {
+		res := <-ch
+		if res.err != nil {
+			lastErr = res.err
+			continue
+		}
+		if res.resp.StatusCode == http.StatusOK {
+			return res.resp, res.body, nil
+		}
+		lastErr = fmt.Errorf("received status code %d", res.resp.StatusCode)
+	}
+
+	return nil, nil, lastErr
+}
+
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	reqCount.WithLabelValues(r.URL.Path).Inc()
@@ -173,29 +212,15 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	externalAPIURL := os.Getenv("EXTERNAL_API_URL")
-	if externalAPIURL == "" {
+	externalAPIURLs := strings.Split(os.Getenv("EXTERNAL_API_URL"), ",")
+	if len(externalAPIURLs) == 0 || externalAPIURLs[0] == "" {
 		log.Fatal().Msg("EXTERNAL_API_URL environment variable is required")
 	}
 
-	resp, err := http.Post(externalAPIURL, "application/json", bytes.NewBuffer(jsonData))
+	resp, body, err := makeParallelRequests(externalAPIURLs, jsonData)
 	if err != nil {
-		http.Error(w, "Failed to call external API", http.StatusInternalServerError)
-		log.Error().Err(err).Msgf("Failed to call external API at %s for host: %s, path: %s", externalAPIURL, r.Host, r.URL.Path) // More verbose logging
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, "External API call failed", resp.StatusCode)
-		log.Error().Msgf("External API call failed with status: %d at %s for host: %s, path: %s", resp.StatusCode, externalAPIURL, r.Host, r.URL.Path) // More verbose logging
-		return
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, "Failed to read response body", http.StatusInternalServerError)
-		log.Error().Err(err).Msg("Failed to read response body")
+		http.Error(w, "Failed to call external APIs", http.StatusInternalServerError)
+		log.Error().Err(err).Msgf("All external API calls failed for host: %s, path: %s", r.Host, r.URL.Path)
 		return
 	}
 
@@ -249,11 +274,11 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// If it's HTML content, inject the banner
-		if strings.Contains(contentType, "text/html") {
-			modifiedHTML := injectHTMLBanner(string(decoded), consensusNodes, totalNodes, consensusPercentage)
-			decoded = []byte(modifiedHTML)
-		}
+		// // If it's HTML content, inject the banner
+		// if strings.Contains(contentType, "text/html") {
+		// 	modifiedHTML := injectHTMLBanner(string(decoded), consensusNodes, totalNodes, consensusPercentage)
+		// 	decoded = []byte(modifiedHTML)
+		// }
 
 		w.Header().Set("Content-Type", contentType)
 		w.WriteHeader(resp.StatusCode)
