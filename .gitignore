@@ -1,2 +1,3 @@
 go-host-multi-domains-example
 .env
+__debug*
