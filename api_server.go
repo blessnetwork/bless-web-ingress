@@ -10,6 +10,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	ung "github.com/dillonstreator/go-unique-name-generator"
@@ -37,6 +38,56 @@ type APIResponse struct {
 	Code      string            `json:"code"`
 	RequestID string            `json:"request_id"`
 	Results   []ExecutionResult `json:"results"`
+}
+
+type CacheEntry struct {
+	ContentType string
+	Data        []byte
+	Timestamp   time.Time
+}
+
+var (
+	responseCache = make(map[string]CacheEntry)
+	cacheMutex    sync.RWMutex
+	cacheExpiry   = 1 * time.Hour // Cache entries expire after 1 hour
+)
+
+func getCacheKey(host, path, cid string) string {
+	return fmt.Sprintf("%s|%s|%s", host, path, cid)
+}
+
+func getCachedResponse(host, path, cid string) (*CacheEntry, bool) {
+	cacheMutex.RLock()
+	defer cacheMutex.RUnlock()
+
+	key := getCacheKey(host, path, cid)
+	entry, exists := responseCache[key]
+	if !exists {
+		return nil, false
+	}
+
+	if time.Since(entry.Timestamp) > cacheExpiry {
+		go func() {
+			cacheMutex.Lock()
+			delete(responseCache, key)
+			cacheMutex.Unlock()
+		}()
+		return nil, false
+	}
+
+	return &entry, true
+}
+
+func setCachedResponse(host, path, cid, contentType string, data []byte) {
+	cacheMutex.Lock()
+	defer cacheMutex.Unlock()
+
+	key := getCacheKey(host, path, cid)
+	responseCache[key] = CacheEntry{
+		ContentType: contentType,
+		Data:        data,
+		Timestamp:   time.Now(),
+	}
 }
 
 func injectHTMLBanner(htmlContent string, consensusNodes, totalNodes int, consensusPercentage float64) string {
@@ -262,6 +313,17 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	consensusPercentage := float64(highestConsensus.Frequency)
 
 	// Check if the response is base64 encoded with content type
+	if cached, found := getCachedResponse(r.Host, r.URL.Path, data.Destination); found {
+		w.Header().Set("Content-Type", cached.ContentType)
+		w.Header().Set("X-Cache", "HIT")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(cached.Data); err != nil {
+			http.Error(w, "Failed to write response", http.StatusInternalServerError)
+			log.Error().Err(err).Msg("Failed to write cached response")
+		}
+		return
+	}
+
 	if matched, _ := regexp.MatchString(`^data:([^;]+);base64,`, stdout); matched {
 		parts := strings.SplitN(stdout, ",", 2)
 		contentType := strings.SplitN(parts[0], ":", 2)[1]       // Get full content type
@@ -274,13 +336,11 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// // If it's HTML content, inject the banner
-		// if strings.Contains(contentType, "text/html") {
-		// 	modifiedHTML := injectHTMLBanner(string(decoded), consensusNodes, totalNodes, consensusPercentage)
-		// 	decoded = []byte(modifiedHTML)
-		// }
+		// Cache the decoded response
+		setCachedResponse(r.Host, r.URL.Path, data.Destination, contentType, decoded)
 
 		w.Header().Set("Content-Type", contentType)
+		w.Header().Set("X-Cache", "MISS")
 		w.WriteHeader(resp.StatusCode)
 
 		if _, err := w.Write(decoded); err != nil {
