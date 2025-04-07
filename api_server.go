@@ -401,16 +401,14 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert permissions array to string if not empty
-	if len(data.Permissions) > 0 {
-		permissionsJSON, err := json.Marshal(data.Permissions)
-		if err != nil {
-			http.Error(w, "Failed to process permissions", http.StatusBadRequest)
-			log.Error().Err(err).Msg("Failed to marshal permissions")
-			return
-		}
-		data.PermissionsString = string(permissionsJSON)
+	// Always set PermissionsString regardless of array length
+	permissionsJSON, err := json.Marshal(data.Permissions)
+	if err != nil {
+		http.Error(w, "Failed to process permissions", http.StatusBadRequest)
+		log.Error().Err(err).Msg("Failed to marshal permissions")
+		return
 	}
+	data.PermissionsString = string(permissionsJSON)
 
 	pattern := `^bafy[a-zA-Z0-9]{50,}$`
 	matched, err := regexp.MatchString(pattern, data.Destination)
@@ -497,16 +495,14 @@ func handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert permissions array to string if not empty
-	if len(data.Permissions) > 0 {
-		permissionsJSON, err := json.Marshal(data.Permissions)
-		if err != nil {
-			http.Error(w, "Failed to process permissions", http.StatusBadRequest)
-			log.Error().Err(err).Msg("Failed to marshal permissions")
-			return
-		}
-		data.PermissionsString = string(permissionsJSON)
+	// Always set PermissionsString regardless of array length
+	permissionsJSON, err := json.Marshal(data.Permissions)
+	if err != nil {
+		http.Error(w, "Failed to process permissions", http.StatusBadRequest)
+		log.Error().Err(err).Msg("Failed to marshal permissions")
+		return
 	}
+	data.PermissionsString = string(permissionsJSON)
 
 	pattern := `^bafy[a-zA-Z0-9]{50,}$`
 	matched, err := regexp.MatchString(pattern, data.Destination)
