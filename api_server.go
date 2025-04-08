@@ -401,6 +401,15 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Always set PermissionsString regardless of array length
+	permissionsJSON, err := json.Marshal(data.Permissions)
+	if err != nil {
+		http.Error(w, "Failed to process permissions", http.StatusBadRequest)
+		log.Error().Err(err).Msg("Failed to marshal permissions")
+		return
+	}
+	data.PermissionsString = string(permissionsJSON)
+
 	pattern := `^bafy[a-zA-Z0-9]{50,}$`
 	matched, err := regexp.MatchString(pattern, data.Destination)
 	if err != nil || !matched {
@@ -485,6 +494,15 @@ func handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 		log.Error().Msg("Destination and UpdaterID are required")
 		return
 	}
+
+	// Always set PermissionsString regardless of array length
+	permissionsJSON, err := json.Marshal(data.Permissions)
+	if err != nil {
+		http.Error(w, "Failed to process permissions", http.StatusBadRequest)
+		log.Error().Err(err).Msg("Failed to marshal permissions")
+		return
+	}
+	data.PermissionsString = string(permissionsJSON)
 
 	pattern := `^bafy[a-zA-Z0-9]{50,}$`
 	matched, err := regexp.MatchString(pattern, data.Destination)
