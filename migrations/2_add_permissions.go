@@ -23,11 +23,11 @@ func main() {
 	}
 	defer db.Close()
 
-	// Add permissions column to the hosts table
-	_, err = db.Exec("ALTER TABLE hosts ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '[]'::jsonb")
+	// Add permissions_string column to the hosts table
+	_, err = db.Exec("ALTER TABLE hosts ADD COLUMN IF NOT EXISTS permissions_string JSONB DEFAULT '[]'::jsonb")
 	if err != nil {
-		log.Fatal("Failed to add permissions column:", err)
+		log.Fatal("Failed to add permissions_string column:", err)
 	}
 
-	log.Println("Added permissions column to hosts table successfully")
+	log.Println("Added permissions_string column to hosts table successfully")
 }
