@@ -355,9 +355,9 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	stdout := highestConsensus.Result.Stdout
-	totalNodes := len(apiResponse.Cluster.Peers)
-	consensusNodes := len(highestConsensus.Peers)
-	consensusPercentage := float64(highestConsensus.Frequency)
+	// totalNodes := len(apiResponse.Cluster.Peers)
+	// consensusNodes := len(highestConsensus.Peers)
+	// consensusPercentage := float64(highestConsensus.Frequency)
 
 	// Check if the response is base64 encoded with content type
 	if cached, found := getCachedResponse(r.Host, r.URL.Path, data.Destination); found {
