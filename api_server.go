@@ -237,12 +237,19 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	stdin := map[string]string{"path": r.URL.Path, "method": r.Method}
 	stdinJSON, _ := json.Marshal(stdin)
+	var permissions []string
+	if err := json.Unmarshal([]byte(data.PermissionsString), &permissions); err != nil {
+		http.Error(w, "Failed to unmarshal permissions", http.StatusInternalServerError)
+		log.Error().Err(err).Msg("Failed to unmarshal permissions")
+		return
+	}
+
 	requestBody := map[string]interface{}{
 		"function_id": data.Destination,
 		"method":      data.EntryMethod,
 		"parameters":  nil,
 		"config": map[string]interface{}{
-			"permissions":     []interface{}{},
+			"permissions":     permissions,
 			"stdin":           string(stdinJSON),
 			"env_vars":        []map[string]string{},
 			"number_of_nodes": 1,
