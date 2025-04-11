@@ -403,7 +403,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 		case "html":
 			w.Header().Set("Content-Type", "text/html")
-			stdout = injectHTMLBanner(stdout, consensusNodes, totalNodes, consensusPercentage)
+			// stdout = injectHTMLBanner(stdout, consensusNodes, totalNodes, consensusPercentage)
 		default:
 			w.Header().Set("Content-Type", "text/plain")
 		}
