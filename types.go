@@ -10,6 +10,7 @@ type HostData struct {
 	Updated           time.Time `json:"updated"`
 	UpdaterID         string    `json:"updater_id"`
 	EntryMethod       string    `json:"entry_method"`
+	NumberOfNodes     int       `json:"number_of_nodes"`
 	ReturnType        string    `json:"return_type"`
 	Permissions       []string  `json:"permissions"` // Array of permission strings
 	PermissionsString string    `json:"-"`           // Storage format for database (not exposed in JSON)

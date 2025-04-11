@@ -219,6 +219,36 @@ func makeParallelRequests(urls []string, jsonData []byte) (*http.Response, []byt
 	return nil, nil, lastErr
 }
 
+func makeFallbackRequest(urls []string, jsonData []byte) (*http.Response, []byte, error) {
+	var lastErr error
+
+	for _, url := range urls {
+		resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			lastErr = err
+			log.Error().Err(err).Str("url", url).Msg("Request failed, trying next URL")
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			log.Error().Err(err).Str("url", url).Msg("Failed to read response body, trying next URL")
+			continue
+		}
+
+		if resp.StatusCode == http.StatusOK {
+			return resp, body, nil
+		}
+
+		lastErr = fmt.Errorf("received status code %d from %s", resp.StatusCode, url)
+		log.Error().Err(lastErr).Str("url", url).Msg("Request returned non-OK status, trying next URL")
+	}
+
+	return nil, nil, lastErr
+}
+
 func handleRequest(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	reqCount.WithLabelValues(r.URL.Path).Inc()
@@ -275,7 +305,17 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		log.Fatal().Msg("EXTERNAL_API_URL environment variable is required")
 	}
 
-	resp, body, err := makeParallelRequests(externalAPIURLs, jsonData)
+	var resp *http.Response
+	var body []byte
+
+	if data.NumberOfNodes > 1 {
+		log.Info().Int("number_of_nodes", data.NumberOfNodes).Msg("Using parallel requests")
+		resp, body, err = makeParallelRequests(externalAPIURLs, jsonData)
+	} else {
+		log.Info().Msg("Using fallback requests")
+		resp, body, err = makeFallbackRequest(externalAPIURLs, jsonData)
+	}
+
 	if err != nil {
 		http.Error(w, "Failed to call external APIs", http.StatusInternalServerError)
 		log.Error().Err(err).Msgf("All external API calls failed for host: %s, path: %s", r.Host, r.URL.Path)
@@ -363,7 +403,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 		case "html":
 			w.Header().Set("Content-Type", "text/html")
-			stdout = injectHTMLBanner(stdout, consensusNodes, totalNodes, consensusPercentage)
+			// stdout = injectHTMLBanner(stdout, consensusNodes, totalNodes, consensusPercentage)
 		default:
 			w.Header().Set("Content-Type", "text/plain")
 		}
