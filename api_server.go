@@ -274,10 +274,14 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	var bodyData map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &bodyData); err != nil {
-		http.Error(w, "Failed to parse request body as JSON", http.StatusBadRequest)
-		log.Error().Err(err).Msg("Failed to parse request body as JSON")
-		return
+	if len(bodyBytes) > 0 {
+		if err := json.Unmarshal(bodyBytes, &bodyData); err != nil {
+			http.Error(w, "Failed to parse request body as JSON", http.StatusBadRequest)
+			log.Error().Err(err).Msg("Failed to parse request body as JSON")
+			return
+		}
+	} else {
+		bodyData = make(map[string]interface{})
 	}
 
 	stdin := map[string]interface{}{
