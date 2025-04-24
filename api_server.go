@@ -265,8 +265,28 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stdin := map[string]string{"path": r.URL.Path, "method": r.Method}
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+		log.Error().Err(err).Msg("Failed to read request body")
+		return
+	}
+	defer r.Body.Close()
+
+	var bodyData map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &bodyData); err != nil {
+		http.Error(w, "Failed to parse request body as JSON", http.StatusBadRequest)
+		log.Error().Err(err).Msg("Failed to parse request body as JSON")
+		return
+	}
+
+	stdin := map[string]interface{}{
+		"path":   r.URL.Path,
+		"method": r.Method,
+		"body":   bodyData, // Use the parsed JSON object directly
+	}
 	stdinJSON, _ := json.Marshal(stdin)
+
 	var permissions []string
 	if err := json.Unmarshal([]byte(data.PermissionsString), &permissions); err != nil {
 		http.Error(w, "Failed to unmarshal permissions", http.StatusInternalServerError)
