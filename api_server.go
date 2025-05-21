@@ -623,16 +623,6 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Msg("Received health check request")
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3010"
-	}
-
-	if r.Host != "localhost:"+port && r.Host != rootHost {
-		handleRequest(w, r)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
