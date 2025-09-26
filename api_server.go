@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -324,8 +323,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	externalAPIURLs := strings.Split(os.Getenv("EXTERNAL_API_URL"), ",")
-	if len(externalAPIURLs) == 0 || externalAPIURLs[0] == "" {
+	if len(cfg.externalAPIURLs) == 0 || cfg.externalAPIURLs[0] == "" {
 		log.Fatal().Msg("EXTERNAL_API_URL environment variable is required")
 	}
 
@@ -334,10 +332,10 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	if data.NumberOfNodes > 1 {
 		log.Info().Int("number_of_nodes", data.NumberOfNodes).Msg("Using parallel requests")
-		resp, body, err = makeParallelRequests(externalAPIURLs, jsonData)
+		resp, body, err = makeParallelRequests(cfg.externalAPIURLs, jsonData)
 	} else {
 		log.Info().Msg("Using fallback requests")
-		resp, body, err = makeFallbackRequest(externalAPIURLs, jsonData)
+		resp, body, err = makeFallbackRequest(cfg.externalAPIURLs, jsonData)
 	}
 
 	if err != nil {
@@ -449,12 +447,11 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Msg("Received insert host request")
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3010"
+	if cfg.port == "" {
+		cfg.port = "3010"
 	}
 
-	if r.Host != "localhost:"+port && r.Host != rootHost {
+	if r.Host != "localhost:"+cfg.port && r.Host != cfg.rootHost {
 		handleRequest(w, r)
 		return
 	}
@@ -508,12 +505,11 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 		ung.WithSeparator("-"),
 	)
 
-	rootURL := os.Getenv("ROOT_URL")
-	if rootURL == "" {
+	if cfg.rootURL == "" {
 		log.Fatal().Msg("ROOT_URL environment variable is required")
 	}
 
-	data.Host = nameGenerator.Generate() + "-" + data.Destination[len(data.Destination)-8:] + "." + rootURL
+	data.Host = nameGenerator.Generate() + "-" + data.Destination[len(data.Destination)-8:] + "." + cfg.rootURL
 	data.Created = time.Now()
 	data.Updated = time.Now()
 	data.UpdaterID = ksuid.New().String()
@@ -543,12 +539,11 @@ func handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Msg("Received update host request")
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3010"
+	if cfg.port == "" {
+		cfg.port = "3010"
 	}
 
-	if r.Host != "localhost:"+port && r.Host != rootHost {
+	if r.Host != "localhost:"+cfg.port && r.Host != cfg.rootHost {
 		handleRequest(w, r)
 		return
 	}
@@ -640,13 +635,12 @@ func startAPIServer() {
 	http.HandleFunc("/health", handleHealth)
 	http.Handle("/metrics", promhttp.Handler())
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "3010"
+	if cfg.port == "" {
+		cfg.port = "3010"
 	}
 
-	log.Info().Msgf("Server started on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	log.Info().Msgf("Server started on port %s", cfg.port)
+	if err := http.ListenAndServe(":"+cfg.port, nil); err != nil {
 		log.Fatal().Err(err).Msg("Server failed")
 	}
 }

@@ -5,7 +5,7 @@ import "time"
 type HostData struct {
 	Host              string    `json:"host"`
 	Destination       string    `json:"destination"`
-	Owner             string    `json:"owner"`
+	Owner             string    `json:"owner"` // XXX: Owner field is not set by us?
 	Created           time.Time `json:"created"`
 	Updated           time.Time `json:"updated"`
 	UpdaterID         string    `json:"updater_id"`

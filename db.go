@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"os"
 
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog/log"
@@ -13,17 +12,15 @@ var db *sql.DB
 func initDB() {
 	var err error
 
-	connStr := os.Getenv("POSTGRES_CONN")
-	if connStr == "" {
+	if cfg.dbConn == "" {
 		log.Fatal().Msg("POSTGRES_CONN environment variable is required")
 	}
 
-	rootHost = os.Getenv("ROOT_HOST")
-	if rootHost == "" {
+	if cfg.rootHost == "" {
 		log.Fatal().Msg("ROOT_HOST environment variable is required")
 	}
 
-	db, err = sql.Open("postgres", connStr)
+	db, err = sql.Open("postgres", cfg.dbConn)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to database")
 	}
