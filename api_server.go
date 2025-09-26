@@ -273,7 +273,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	var bodyData map[string]interface{}
+	var bodyData map[string]any
 	if len(bodyBytes) > 0 {
 		if err := json.Unmarshal(bodyBytes, &bodyData); err != nil {
 			http.Error(w, "Failed to parse request body as JSON", http.StatusBadRequest)
@@ -281,10 +281,10 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		bodyData = make(map[string]interface{})
+		bodyData = make(map[string]any)
 	}
 
-	stdin := map[string]interface{}{
+	stdin := map[string]any{
 		"path":   r.URL.Path,
 		"method": r.Method,
 		"body":   bodyData, // Use the parsed JSON object directly
@@ -298,11 +298,11 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestBody := map[string]interface{}{
+	requestBody := map[string]any{
 		"function_id": data.Destination,
 		"method":      data.EntryMethod,
 		"parameters":  nil,
-		"config": map[string]interface{}{
+		"config": map[string]any{
 			"permissions":     permissions,
 			"stdin":           string(stdinJSON),
 			"env_vars":        []map[string]string{},
@@ -315,7 +315,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	log.Debug().Str("stdin_config", string(stdinJSON)).Msg("Stdin configuration")
 
 	// Add debug logging
-	log.Debug().Interface("request_body", requestBody).Msg("Request body before sending to external API")
+	log.Debug().Any("request_body", requestBody).Msg("Request body before sending to external API")
 
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
