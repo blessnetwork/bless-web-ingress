@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/blessnetwork/bless-web-ingress/ingress"
@@ -20,75 +19,6 @@ import (
 	"github.com/segmentio/ksuid"
 	"golang.org/x/net/html"
 )
-
-type ExecutionResult struct {
-	Result struct {
-		Stdout   string `json:"stdout"`
-		Stderr   string `json:"stderr"`
-		ExitCode int    `json:"exit_code"`
-	} `json:"result"`
-	Peers     []string `json:"peers"`
-	Frequency int      `json:"frequency"`
-}
-
-type APIResponse struct {
-	Cluster struct {
-		Peers []string `json:"peers"`
-	} `json:"cluster"`
-	Code      string            `json:"code"`
-	RequestID string            `json:"request_id"`
-	Results   []ExecutionResult `json:"results"`
-}
-
-type CacheEntry struct {
-	ContentType string
-	Data        []byte
-	Timestamp   time.Time
-}
-
-var (
-	responseCache = make(map[string]CacheEntry)
-	cacheMutex    sync.RWMutex
-	cacheExpiry   = 1 * time.Hour // Cache entries expire after 1 hour
-)
-
-func getCacheKey(host, path, cid string) string {
-	return fmt.Sprintf("%s|%s|%s", host, path, cid)
-}
-
-func getCachedResponse(host, path, cid string) (*CacheEntry, bool) {
-	cacheMutex.RLock()
-	defer cacheMutex.RUnlock()
-
-	key := getCacheKey(host, path, cid)
-	entry, exists := responseCache[key]
-	if !exists {
-		return nil, false
-	}
-
-	if time.Since(entry.Timestamp) > cacheExpiry {
-		go func() {
-			cacheMutex.Lock()
-			delete(responseCache, key)
-			cacheMutex.Unlock()
-		}()
-		return nil, false
-	}
-
-	return &entry, true
-}
-
-func setCachedResponse(host, path, cid, contentType string, data []byte) {
-	cacheMutex.Lock()
-	defer cacheMutex.Unlock()
-
-	key := getCacheKey(host, path, cid)
-	responseCache[key] = CacheEntry{
-		ContentType: contentType,
-		Data:        data,
-		Timestamp:   time.Now(),
-	}
-}
 
 func injectHTMLBanner(htmlContent string, consensusNodes, totalNodes int, consensusPercentage float64) string {
 	consensusColor := "#28a745" // Green for high consensus
