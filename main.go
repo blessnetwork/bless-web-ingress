@@ -6,9 +6,16 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
+	database "github.com/blessnetwork/bless-web-ingress/db"
 )
 
-var cfg appConfig
+var (
+	cfg appConfig
+
+	db *database.DB
+)
 
 type appConfig struct {
 	rootHost        string
@@ -33,7 +40,11 @@ func init() {
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	initDB()
+	var err error
+	db, err = database.Init(cfg.dbConn, true)
+	if err != nil {
+		log.Fatal().Err(err).Msg("db init failed")
+	}
 	defer db.Close()
 
 	startAPIServer()

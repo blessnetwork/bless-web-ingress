@@ -1,8 +1,10 @@
-package main
+package ingress
 
-import "time"
+import (
+	"time"
+)
 
-type HostData struct {
+type Host struct {
 	Host              string    `json:"host"`
 	Destination       string    `json:"destination"`
 	Owner             string    `json:"owner"` // XXX: Owner field is not set by us?

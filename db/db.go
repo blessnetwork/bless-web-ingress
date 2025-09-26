@@ -1,31 +1,49 @@
-package main
+package db
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 
 	_ "github.com/lib/pq"
-	"github.com/rs/zerolog/log"
+
+	"github.com/blessnetwork/bless-web-ingress/ingress"
 )
 
-var db *sql.DB
+type DB struct {
+	*sql.DB
+}
 
-func initDB() {
-	var err error
+func Init(dbconn string, initTables bool) (*DB, error) {
 
-	if cfg.dbConn == "" {
-		log.Fatal().Msg("POSTGRES_CONN environment variable is required")
+	if dbconn == "" {
+		return nil, errors.New("database connection string is required")
 	}
 
-	if cfg.rootHost == "" {
-		log.Fatal().Msg("ROOT_HOST environment variable is required")
-	}
-
-	db, err = sql.Open("postgres", cfg.dbConn)
+	db, err := sql.Open("postgres", dbconn)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to database")
+		return nil, fmt.Errorf("could not connect to the database: %w", err)
 	}
 
-	_, err = db.Exec(`
+	out := &DB{
+		DB: db,
+	}
+
+	if !initTables {
+		return out, nil
+	}
+
+	err = out.InitTable()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize tables: %w", err)
+	}
+
+	return out, nil
+}
+
+func (db *DB) InitTable() error {
+
+	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS hosts (
 			host TEXT PRIMARY KEY,
 			destination TEXT NOT NULL UNIQUE,
@@ -38,9 +56,8 @@ func initDB() {
 			permissions_string TEXT DEFAULT '[]'  -- New field with empty array default
 		)
 	`)
-
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to create table")
+		return fmt.Errorf("could not create table: %w", err)
 	}
 
 	// Add the permissions_string column if it doesn't exist
@@ -55,44 +72,66 @@ func initDB() {
 			END IF;
 		END $$;
 	`)
-
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to add permissions_string column")
+		return fmt.Errorf("could not add permissions column: %w", err)
 	}
+
+	return nil
 }
 
-func getHostDataByHost(host string) (*HostData, error) {
+func (db *DB) GetHostDataByHost(host string) (*ingress.Host, error) {
+
 	row := db.QueryRow("SELECT host, destination, owner, created, updated, updater_id, entry_method, return_type, permissions_string FROM hosts WHERE host = $1", host)
-	var data HostData
+
+	var data ingress.Host
 	err := row.Scan(&data.Host, &data.Destination, &data.Owner, &data.Created, &data.Updated, &data.UpdaterID, &data.EntryMethod, &data.ReturnType, &data.PermissionsString)
 	if err != nil {
 		return nil, err
 	}
+
 	return &data, nil
 }
 
-func getHostDataByDestination(destination string) (*HostData, error) {
+func (db *DB) GetHostDataByDestination(destination string) (*ingress.Host, error) {
+
 	row := db.QueryRow("SELECT host, destination, owner, created, updated, updater_id, entry_method, return_type, permissions_string FROM hosts WHERE destination = $1", destination)
-	var data HostData
+
+	var data ingress.Host
 	err := row.Scan(&data.Host, &data.Destination, &data.Owner, &data.Created, &data.Updated, &data.UpdaterID, &data.EntryMethod, &data.ReturnType, &data.PermissionsString)
 	if err != nil {
 		return nil, err
 	}
+
 	return &data, nil
 }
 
-func insertHostData(data HostData) error {
+func (db *DB) InsertHostData(host ingress.Host) error {
+
 	_, err := db.Exec(
 		"INSERT INTO hosts (host, destination, owner, created, updated, updater_id, entry_method, return_type, permissions_string) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
-		data.Host, data.Destination, data.Owner, data.Created, data.Updated, data.UpdaterID, data.EntryMethod, data.ReturnType, data.PermissionsString,
+		host.Host,
+		host.Destination,
+		host.Owner,
+		host.Created,
+		host.Updated,
+		host.UpdaterID,
+		host.EntryMethod,
+		host.ReturnType,
+		host.PermissionsString,
 	)
 	return err
 }
 
-func updateHostData(data HostData) error {
+func (db *DB) UpdateHostData(host ingress.Host) error {
+
 	_, err := db.Exec(
 		"UPDATE hosts SET destination = $1, updated = $2, updater_id = $3, return_type = $4, permissions_string = $5 WHERE host = $6",
-		data.Destination, data.Updated, data.UpdaterID, data.ReturnType, data.PermissionsString, data.Host,
+		host.Destination,
+		host.Updated,
+		host.UpdaterID,
+		host.ReturnType,
+		host.PermissionsString,
+		host.Host,
 	)
 	return err
 }

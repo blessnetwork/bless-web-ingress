@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/blessnetwork/bless-web-ingress/ingress"
 	ung "github.com/dillonstreator/go-unique-name-generator"
 	"github.com/dillonstreator/go-unique-name-generator/dictionaries"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -257,7 +258,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Msgf("Received request for host: %s, path: %s", r.Host, r.URL.Path)
 
-	data, err := getHostDataByHost(r.Host)
+	data, err := db.GetHostDataByHost(r.Host)
 	if err != nil {
 		http.NotFound(w, r)
 		log.Error().Err(err).Msg("Host not found")
@@ -456,7 +457,7 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data HostData
+	var data ingress.Host
 	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -487,7 +488,7 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if the destination is unique
-	existingData, err := getHostDataByDestination(data.Destination)
+	existingData, err := db.GetHostDataByDestination(data.Destination)
 	if err == nil && existingData != nil {
 		http.Error(w, "Destination already exists", http.StatusConflict)
 		log.Error().Msg("Destination already exists")
@@ -513,7 +514,7 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 	data.Created = time.Now()
 	data.Updated = time.Now()
 	data.UpdaterID = ksuid.New().String()
-	err = insertHostData(data)
+	err = db.InsertHostData(data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Error().Err(err).Msg("Failed to insert host data")
@@ -548,7 +549,7 @@ func handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data HostData
+	var data ingress.Host
 	err := json.NewDecoder(r.Body).Decode(&data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -578,7 +579,7 @@ func handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existingData, err := getHostDataByHost(data.Host)
+	existingData, err := db.GetHostDataByHost(data.Host)
 	if err != nil {
 		http.Error(w, "Host not found", http.StatusNotFound)
 		log.Error().Err(err).Msg("Host not found")
@@ -592,7 +593,7 @@ func handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data.Updated = time.Now()
-	err = updateHostData(data)
+	err = db.UpdateHostData(data)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		log.Error().Err(err).Msg("Failed to update host data")
