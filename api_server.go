@@ -448,10 +448,6 @@ func handleInsertHost(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Msg("Received insert host request")
 
-	if cfg.port == "" {
-		cfg.port = "3010"
-	}
-
 	if r.Host != "localhost:"+cfg.port && r.Host != cfg.rootHost {
 		handleRequest(w, r)
 		return
@@ -539,10 +535,6 @@ func handleUpdateHost(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	log.Info().Msg("Received update host request")
-
-	if cfg.port == "" {
-		cfg.port = "3010"
-	}
 
 	if r.Host != "localhost:"+cfg.port && r.Host != cfg.rootHost {
 		handleRequest(w, r)
@@ -635,10 +627,6 @@ func startAPIServer() {
 	http.HandleFunc("/update", handleUpdateHost)
 	http.HandleFunc("/health", handleHealth)
 	http.Handle("/metrics", promhttp.Handler())
-
-	if cfg.port == "" {
-		cfg.port = "3010"
-	}
 
 	log.Info().Msgf("Server started on port %s", cfg.port)
 	if err := http.ListenAndServe(":"+cfg.port, nil); err != nil {

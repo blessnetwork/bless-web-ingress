@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"os"
 	"strings"
 
@@ -32,9 +33,12 @@ func init() {
 
 	cfg.rootHost = os.Getenv("ROOT_HOST")
 	cfg.rootURL = os.Getenv("ROOT_URL")
-	cfg.port = os.Getenv("PORT")
 	cfg.dbConn = os.Getenv("POSTGRES_CONN")
 	cfg.externalAPIURLs = strings.Split(os.Getenv("EXTERNAL_API_URL"), ",")
+	cfg.port = cmp.Or(
+		os.Getenv("PORT"),
+		"3010",
+	)
 }
 
 func main() {
