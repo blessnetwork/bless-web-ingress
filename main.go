@@ -14,8 +14,6 @@ import (
 
 var (
 	cfg appConfig
-
-	db *database.DB
 )
 
 type appConfig struct {
@@ -34,22 +32,31 @@ func init() {
 	cfg.rootHost = os.Getenv("ROOT_HOST")
 	cfg.rootURL = os.Getenv("ROOT_URL")
 	cfg.dbConn = os.Getenv("POSTGRES_CONN")
+
 	cfg.externalAPIURLs = strings.Split(os.Getenv("EXTERNAL_API_URL"), ",")
+
 	cfg.port = cmp.Or(
 		os.Getenv("PORT"),
-		"3010",
+		DefaultAppPort,
 	)
 }
 
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	var err error
-	db, err = database.Init(cfg.dbConn, true)
+	h, err := database.Connect("postgres", cfg.dbConn)
+	if err != nil {
+		log.Fatal().Err(err).Msg("could not connect to the database")
+	}
+
+	db, err := database.NewDB(h, true)
 	if err != nil {
 		log.Fatal().Err(err).Msg("db init failed")
 	}
 	defer db.Close()
 
-	startAPIServer()
+	addr := ":" + cfg.port
+
+	api := newAPI(addr, db)
+	api.Start()
 }

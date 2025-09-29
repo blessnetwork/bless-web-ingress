@@ -14,16 +14,21 @@ type DB struct {
 	*sql.DB
 }
 
-func Init(dbconn string, initTables bool) (*DB, error) {
+func Connect(driverName string, dbconn string) (*sql.DB, error) {
 
 	if dbconn == "" {
 		return nil, errors.New("database connection string is required")
 	}
 
-	db, err := sql.Open("postgres", dbconn)
+	db, err := sql.Open(driverName, dbconn)
 	if err != nil {
 		return nil, fmt.Errorf("could not connect to the database: %w", err)
 	}
+
+	return db, nil
+}
+
+func NewDB(db *sql.DB, initTables bool) (*DB, error) {
 
 	out := &DB{
 		DB: db,
@@ -33,7 +38,7 @@ func Init(dbconn string, initTables bool) (*DB, error) {
 		return out, nil
 	}
 
-	err = out.InitTable()
+	err := out.InitTable()
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize tables: %w", err)
 	}
@@ -61,20 +66,20 @@ func (db *DB) InitTable() error {
 	}
 
 	// Add the permissions_string column if it doesn't exist
-	_, err = db.Exec(`
-		DO $$
-		BEGIN
-			IF NOT EXISTS (
-				SELECT FROM information_schema.columns
-				WHERE table_name = 'hosts' AND column_name = 'permissions_string'
-			) THEN
-				ALTER TABLE hosts ADD COLUMN permissions_string TEXT DEFAULT '[]';
-			END IF;
-		END $$;
-	`)
-	if err != nil {
-		return fmt.Errorf("could not add permissions column: %w", err)
-	}
+	// _, err = db.Exec(`
+	// 	DO $$
+	// 	BEGIN
+	// 		IF NOT EXISTS (
+	// 			SELECT FROM information_schema.columns
+	// 			WHERE table_name = 'hosts' AND column_name = 'permissions_string'
+	// 		) THEN
+	// 			ALTER TABLE hosts ADD COLUMN permissions_string TEXT DEFAULT '[]';
+	// 		END IF;
+	// 	END $$;
+	// `)
+	// if err != nil {
+	// 	return fmt.Errorf("could not add permissions column: %w", err)
+	// }
 
 	return nil
 }
