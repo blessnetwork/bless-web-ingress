@@ -44,11 +44,10 @@ func TestAPI(t *testing.T) {
 
 	var (
 		sampleRec = ingress.Host{
-			Destination:   "bafybeie3nlygbnuxhvqv3gvwa2hmd4tcfzk5jtvscwl6qs3ljn5tknlt4q",
-			EntryMethod:   "echo.wasm",
-			NumberOfNodes: 1,
-			ReturnType:    ReturnTypeRaw,
-			Permissions:   []string{"a", "b", "c"},
+			Destination: "bafybeie3nlygbnuxhvqv3gvwa2hmd4tcfzk5jtvscwl6qs3ljn5tknlt4q",
+			EntryMethod: "echo.wasm",
+			ReturnType:  ReturnTypeRaw,
+			Permissions: []string{"a", "b", "c"},
 		}
 
 		// Fields known after insert
@@ -92,7 +91,6 @@ func TestAPI(t *testing.T) {
 
 		updated := sampleRec
 		updated.EntryMethod = "updated-entry.wasm"
-		updated.NumberOfNodes = 2
 		updated.Host = hostID
 		updated.UpdaterID = updaterID
 
@@ -109,7 +107,6 @@ func TestAPI(t *testing.T) {
 
 		require.Equal(t, updated.Destination, returned.Destination)
 		require.Equal(t, updated.EntryMethod, returned.EntryMethod)
-		require.Equal(t, updated.NumberOfNodes, returned.NumberOfNodes)
 		require.Equal(t, updated.Permissions, returned.Permissions)
 		require.Equal(t, updated.ReturnType, returned.ReturnType)
 
@@ -122,7 +119,6 @@ func TestAPI(t *testing.T) {
 
 		updated := sampleRec
 		updated.EntryMethod = "updated-entry.wasm"
-		updated.NumberOfNodes = 3
 		updated.Host = hostID
 		updated.UpdaterID = updaterID + "1"
 
@@ -136,10 +132,9 @@ func TestAPI(t *testing.T) {
 	t.Run("insert of identical destination fails", func(t *testing.T) {
 
 		rec := ingress.Host{
-			Destination:   sampleRec.Destination,
-			EntryMethod:   "whatever.wasm",
-			NumberOfNodes: 10,
-			Permissions:   []string{"a"},
+			Destination: sampleRec.Destination,
+			EntryMethod: "whatever.wasm",
+			Permissions: []string{"a"},
 		}
 
 		res, err := http.Post(insertEndpoint, "application/json", bytes.NewReader(serialize(t, rec)))
@@ -152,10 +147,9 @@ func TestAPI(t *testing.T) {
 	t.Run("insert of invalid destination fails", func(t *testing.T) {
 
 		rec := ingress.Host{
-			Destination:   "random-malformed-cid",
-			EntryMethod:   "whatever.wasm",
-			NumberOfNodes: 10,
-			Permissions:   []string{"a"},
+			Destination: "random-malformed-cid",
+			EntryMethod: "whatever.wasm",
+			Permissions: []string{"a"},
 		}
 
 		res, err := http.Post(insertEndpoint, "application/json", bytes.NewReader(serialize(t, rec)))
