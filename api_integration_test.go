@@ -20,11 +20,11 @@ import (
 
 func TestAPI(t *testing.T) {
 
-	const (
-		addr = "127.0.0.1:" + DefaultAppPort
-	)
-
 	var (
+		addr           = "127.0.0.1:" + DefaultAppPort
+		insertEndpoint = fmt.Sprintf("http://%s/insert", addr)
+		updateEndpoint = fmt.Sprintf("http://%s/update", addr)
+
 		db, shutdown = createDB(t)
 		api          = newAPI(addr, db)
 	)
@@ -43,7 +43,7 @@ func TestAPI(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	var (
-		rec = ingress.Host{
+		sampleRec = ingress.Host{
 			Destination:   "bafybeie3nlygbnuxhvqv3gvwa2hmd4tcfzk5jtvscwl6qs3ljn5tknlt4q",
 			EntryMethod:   "echo.wasm",
 			NumberOfNodes: 1,
@@ -58,12 +58,9 @@ func TestAPI(t *testing.T) {
 
 	t.Run("insert", func(t *testing.T) {
 
-		var (
-			addr  = fmt.Sprintf("http://%s/insert", addr)
-			start = time.Now()
-		)
+		start := time.Now()
 
-		res, err := http.Post(addr, "application/json", bytes.NewReader(serialize(t, rec)))
+		res, err := http.Post(insertEndpoint, "application/json", bytes.NewReader(serialize(t, sampleRec)))
 		require.NoError(t, err)
 		defer res.Body.Close()
 
@@ -73,17 +70,14 @@ func TestAPI(t *testing.T) {
 		err = json.NewDecoder(res.Body).Decode(&returned)
 		require.NoError(t, err)
 
-		require.Equal(t, rec.Destination, returned.Destination)
-		require.Equal(t, rec.EntryMethod, returned.EntryMethod)
-		require.Equal(t, rec.NumberOfNodes, returned.NumberOfNodes)
-		require.Equal(t, rec.Permissions, returned.Permissions)
-		require.Equal(t, rec.ReturnType, returned.ReturnType)
+		require.Equal(t, sampleRec.Destination, returned.Destination)
+		require.Equal(t, sampleRec.EntryMethod, returned.EntryMethod)
+		require.Equal(t, sampleRec.NumberOfNodes, returned.NumberOfNodes)
+		require.Equal(t, sampleRec.Permissions, returned.Permissions)
+		require.Equal(t, sampleRec.ReturnType, returned.ReturnType)
 
 		require.NotZero(t, returned.Host)
 		require.NotZero(t, returned.UpdaterID)
-
-		require.NotZero(t, returned.Created)
-		require.NotZero(t, returned.Updated)
 
 		require.True(t, returned.Created.After(start))
 		require.True(t, returned.Updated.After(start))
@@ -94,20 +88,15 @@ func TestAPI(t *testing.T) {
 	})
 	t.Run("update", func(t *testing.T) {
 
-		var (
-			addr  = fmt.Sprintf("http://%s/update", addr)
-			start = time.Now()
-		)
+		start := time.Now()
 
-		// TODO: Updater ID.
-
-		updated := rec
+		updated := sampleRec
 		updated.EntryMethod = "updated-entry.wasm"
 		updated.NumberOfNodes = 2
 		updated.Host = hostID
-		updated.UpdaterID = updaterID // + "1"
+		updated.UpdaterID = updaterID
 
-		res, err := http.Post(addr, "application/json", bytes.NewReader(serialize(t, updated)))
+		res, err := http.Post(updateEndpoint, "application/json", bytes.NewReader(serialize(t, updated)))
 		require.NoError(t, err)
 
 		defer res.Body.Close()
@@ -127,12 +116,56 @@ func TestAPI(t *testing.T) {
 		require.NotZero(t, returned.Host)
 		require.NotZero(t, returned.UpdaterID)
 
-		require.NotZero(t, returned.Updated)
 		require.True(t, returned.Updated.After(start))
+	})
+	t.Run("update with wrong updater ID fails", func(t *testing.T) {
+
+		updated := sampleRec
+		updated.EntryMethod = "updated-entry.wasm"
+		updated.NumberOfNodes = 3
+		updated.Host = hostID
+		updated.UpdaterID = updaterID + "1"
+
+		res, err := http.Post(updateEndpoint, "application/json", bytes.NewReader(serialize(t, updated)))
+		require.NoError(t, err)
+
+		defer res.Body.Close()
+
+		require.Equal(t, http.StatusForbidden, res.StatusCode)
+	})
+	t.Run("insert of identical destination fails", func(t *testing.T) {
+
+		rec := ingress.Host{
+			Destination:   sampleRec.Destination,
+			EntryMethod:   "whatever.wasm",
+			NumberOfNodes: 10,
+			Permissions:   []string{"a"},
+		}
+
+		res, err := http.Post(insertEndpoint, "application/json", bytes.NewReader(serialize(t, rec)))
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		require.Equal(t, http.StatusConflict, res.StatusCode)
+
+	})
+	t.Run("insert of invalid destination fails", func(t *testing.T) {
+
+		rec := ingress.Host{
+			Destination:   "random-malformed-cid",
+			EntryMethod:   "whatever.wasm",
+			NumberOfNodes: 10,
+			Permissions:   []string{"a"},
+		}
+
+		res, err := http.Post(insertEndpoint, "application/json", bytes.NewReader(serialize(t, rec)))
+		require.NoError(t, err)
+		defer res.Body.Close()
+
+		require.Equal(t, http.StatusBadRequest, res.StatusCode)
 	})
 }
 
-// TODO: Just return a shutdown function and keep everything else hidden.
 func createDB(t *testing.T) (*database.DB, func(t *testing.T)) {
 	t.Helper()
 
