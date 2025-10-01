@@ -36,8 +36,6 @@ type api struct {
 
 func newAPI(addr string, db DB) *api {
 
-	// addr := ":" + cfg.port
-
 	// Uses default mux
 	srv := &http.Server{Addr: addr}
 
