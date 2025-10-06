@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -166,21 +167,36 @@ func TestAPI(t *testing.T) {
 
 func TestAPI_Execute(t *testing.T) {
 
-	const ()
+	var (
+		ctx = context.Background()
+	)
+
+	shutdown := startNodes(t, ctx)
+	defer shutdown(ctx)
+
+}
+
+func startNodes(t *testing.T, ctx context.Context) (shutdownFunc func(context.Context) error) {
+	t.Helper()
 
 	var (
-		ctx           = context.Background()
 		b7sImage      = "ghcr.io/blessnetwork/b7s:v0.7.5"
 		headP2PPort   = "9000"
 		headAPIPort   = "8888"
 		workerP2PPort = "9100"
 		keyPath       = "/app/key.bin"
+
+		shutdown []func(context.Context) error
 	)
+
+	defer func() {
+		shutdownFunc = shutdownAll(shutdown)
+	}()
 
 	net, err := network.New(ctx)
 	require.NoError(t, err)
 
-	defer net.Remove(ctx)
+	shutdown = append(shutdown, net.Remove)
 
 	head, err := testcontainers.GenericContainer(ctx,
 		testcontainers.GenericContainerRequest{
@@ -189,7 +205,7 @@ func TestAPI_Execute(t *testing.T) {
 				Name:  "b7s-head",
 				ExposedPorts: []string{
 					headP2PPort + "/tcp",
-					headAPIPort + "/tcp",
+					fmt.Sprintf("%v/tcp:%v/tcp", headAPIPort, headAPIPort),
 				},
 				Networks: []string{net.Name},
 				WaitingFor: wait.ForHTTP("/api/v1/health").
@@ -218,6 +234,8 @@ func TestAPI_Execute(t *testing.T) {
 	require.NoError(t, err)
 
 	defer head.Stop(ctx, nil)
+
+	shutdown = append(shutdown, func(ctx context.Context) error { return head.Stop(ctx, nil) })
 
 	headIP, err := head.ContainerIP(ctx)
 	require.NoError(t, err)
@@ -255,8 +273,25 @@ func TestAPI_Execute(t *testing.T) {
 	err = worker.Start(ctx)
 	require.NoError(t, err)
 
-	defer worker.Stop(ctx, nil)
+	shutdown = append(shutdown, func(ctx context.Context) error { return worker.Stop(ctx, nil) })
 
+	// Deferred call will take care of setting up the shutdown function.
+	return nil
+}
+
+func shutdownAll(fns []func(context.Context) error) func(context.Context) error {
+	return func(ctx context.Context) error {
+		var errs []error
+
+		for _, fn := range fns {
+			err := fn(ctx)
+			if err != nil {
+				errs = append(errs, err)
+			}
+		}
+
+		return errors.Join(errs...)
+	}
 }
 
 func createDB(t *testing.T) (*database.DB, func(t *testing.T)) {
