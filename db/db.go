@@ -65,22 +65,6 @@ func (db *DB) InitTable() error {
 		return fmt.Errorf("could not create table: %w", err)
 	}
 
-	// Add the permissions_string column if it doesn't exist
-	// _, err = db.Exec(`
-	// 	DO $$
-	// 	BEGIN
-	// 		IF NOT EXISTS (
-	// 			SELECT FROM information_schema.columns
-	// 			WHERE table_name = 'hosts' AND column_name = 'permissions_string'
-	// 		) THEN
-	// 			ALTER TABLE hosts ADD COLUMN permissions_string TEXT DEFAULT '[]';
-	// 		END IF;
-	// 	END $$;
-	// `)
-	// if err != nil {
-	// 	return fmt.Errorf("could not add permissions column: %w", err)
-	// }
-
 	return nil
 }
 
