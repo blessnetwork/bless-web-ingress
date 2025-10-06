@@ -13,9 +13,13 @@ import (
 
 	database "github.com/blessnetwork/bless-web-ingress/db"
 	"github.com/blessnetwork/bless-web-ingress/ingress"
+	"github.com/docker/go-connections/nat"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/network"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func TestAPI(t *testing.T) {
@@ -158,6 +162,101 @@ func TestAPI(t *testing.T) {
 
 		require.Equal(t, http.StatusBadRequest, res.StatusCode)
 	})
+}
+
+func TestAPI_Execute(t *testing.T) {
+
+	const ()
+
+	var (
+		ctx           = context.Background()
+		b7sImage      = "ghcr.io/blessnetwork/b7s:v0.7.5"
+		headP2PPort   = "9000"
+		headAPIPort   = "8888"
+		workerP2PPort = "9100"
+		keyPath       = "/app/key.bin"
+	)
+
+	net, err := network.New(ctx)
+	require.NoError(t, err)
+
+	defer net.Remove(ctx)
+
+	head, err := testcontainers.GenericContainer(ctx,
+		testcontainers.GenericContainerRequest{
+			ContainerRequest: testcontainers.ContainerRequest{
+				Image: b7sImage,
+				Name:  "b7s-head",
+				ExposedPorts: []string{
+					headP2PPort + "/tcp",
+					headAPIPort + "/tcp",
+				},
+				Networks: []string{net.Name},
+				WaitingFor: wait.ForHTTP("/api/v1/health").
+					WithPort(nat.Port(headAPIPort + "/tcp")).
+					WithStartupTimeout(10 * time.Second),
+				Env: map[string]string{
+					"NODE_ROLE":     "head",
+					"REST_API":      headAPIPort,
+					"P2P_PORT":      headP2PPort,
+					"NODE_KEY_PATH": keyPath,
+				},
+				Files: []testcontainers.ContainerFile{
+					{
+						HostFilePath:      "testdata/keys/head/priv.bin",
+						ContainerFilePath: keyPath,
+						FileMode:          0o640,
+					},
+				},
+			},
+			Started: true,
+		},
+	)
+	require.NoError(t, err)
+
+	err = head.Start(ctx)
+	require.NoError(t, err)
+
+	defer head.Stop(ctx, nil)
+
+	headIP, err := head.ContainerIP(ctx)
+	require.NoError(t, err)
+
+	headNodeID, err := os.ReadFile("testdata/keys/head/peerid.txt")
+	require.NoError(t, err)
+
+	worker, err := testcontainers.GenericContainer(ctx,
+		testcontainers.GenericContainerRequest{
+			ContainerRequest: testcontainers.ContainerRequest{
+				Image: b7sImage,
+				Name:  "b7s-worker",
+				ExposedPorts: []string{
+					workerP2PPort + "/tcp",
+				},
+				Networks: []string{net.Name},
+				Env: map[string]string{
+					"NODE_ROLE":     "worker",
+					"P2P_PORT":      workerP2PPort,
+					"NODE_KEY_PATH": keyPath,
+					"BOOT_NODES":    fmt.Sprintf("/ip4/%v/tcp/%v/p2p/%v", headIP, headP2PPort, string(headNodeID)),
+				},
+				Files: []testcontainers.ContainerFile{
+					{
+						HostFilePath:      "testdata/keys/worker/priv.bin",
+						ContainerFilePath: keyPath,
+						FileMode:          0o640,
+					},
+				},
+			},
+		},
+	)
+	require.NoError(t, err)
+
+	err = worker.Start(ctx)
+	require.NoError(t, err)
+
+	defer worker.Stop(ctx, nil)
+
 }
 
 func createDB(t *testing.T) (*database.DB, func(t *testing.T)) {
